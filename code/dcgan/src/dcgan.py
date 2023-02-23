@@ -32,7 +32,7 @@ class Generator(nn.Module):
             nn.ReLU(True),
 
             nn.ConvTranspose2d(
-                64, 3, kernel_size=4, 
+                64, 1, kernel_size=4, 
                 stride=2, padding=1, bias=False),
             nn.Tanh()
         )
@@ -47,7 +47,7 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         self.main = nn.Sequential(
             nn.Conv2d(
-                3, 64, kernel_size=4, 
+                1, 64, kernel_size=4, 
                 stride=2, padding=1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
 
