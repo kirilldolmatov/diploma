@@ -9,20 +9,26 @@ import matplotlib
 from utils import save_generator_image, weights_init
 from utils import label_fake, label_real, create_noise
 from dcgan import Generator, Discriminator
+from dataset import BlastocystDataset
+
 from torch.utils.data import DataLoader
 from matplotlib import pyplot as plt
 from tqdm import tqdm
+from pathlib import Path
+
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 matplotlib.style.use('ggplot')
 
 # learning parameters / configurations according to paper
 image_size = 64 # we need to resize image to 64x64
 batch_size = 128
-nz = 100 # latent vector size
+nz = 1000 # latent vector size
 beta1 = 0.5 # beta1 value for Adam optimizer
-lr = 0.0002 # learning rate according to paper
-sample_size = 64 # fixed sample size
-epochs = 2 # number of epoch to train
+lr = 0.003 # learning rate according to paper
+sample_size = 1 # fixed sample size
+epochs = 300 # number of epoch to train
 
 INPUT_DATA = '/home/kirill/code/diploma/data/input'
 OUTPUT_DATA = '/home/kirill/code/diploma/data/outputs'
@@ -31,28 +37,40 @@ OUTPUT_DATA = '/home/kirill/code/diploma/data/outputs'
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 # image transforms
-transform = transforms.Compose([
-    transforms.Resize(image_size),
+# transform = transforms.Compose([
+#     transforms.Resize(image_size),
+#     transforms.ToTensor(),
+#     transforms.Normalize((0.5, 0.5, 0.5), 
+#     (0.5, 0.5, 0.5)),
+# ])
+
+transform_blastocyst = transforms.Compose([
+    transforms.Grayscale(num_output_channels=1),
+    transforms.Resize(64),
     transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), 
-    (0.5, 0.5, 0.5)),
+    transforms.Normalize((0.5), (0.5)),
 ])
 
 # prepare the data
-train_data = datasets.CIFAR10(
-    root=INPUT_DATA,
-    train=True,
-    download=False,
-    transform=transform
-)
-train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
+# train_data = datasets.CIFAR10(
+#     root=INPUT_DATA,
+#     train=True,
+#     download=False,
+#     transform=transform
+# )
+# train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
 
+image_path = Path("/home/kirill/code/diploma/data/markup")
 
+train_data = BlastocystDataset(targ_dir=image_path, transform=transform_blastocyst)
+
+train_loader = DataLoader(dataset=train_data, 
+                              batch_size=batch_size,
+                              shuffle=True) 
 # initialize models
 generator = Generator(nz).to(device)
 discriminator = Discriminator().to(device)
 
-print('Fuck!!!')
 
 # initialize generator weights
 generator.apply(weights_init)
