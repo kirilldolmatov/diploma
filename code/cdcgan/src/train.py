@@ -22,14 +22,21 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 matplotlib.style.use('ggplot')
 
+import wandb
+wandb.login()
+wandb.init(project="cdcgan_1")
 
-IMG_SIZE = 28 # we need to resize image
-BATCH_SIZE = 32
-LATENT_VECTOR_SIZE = 100 # latent vector size
-BETA1 = 0.5 # beta1 value for Adam optimizer
-LR = 0.0002 # learning rate according to paper
-EPOCHS = 100 # number of epoch to train
-Ksteps = 1 # number of discriminator steps for each generator step
+config = wandb.config
+
+
+config.IMG_SIZE = 28 # we need to resize image
+config.BATCH_SIZE = 128
+config.LATENT_VECTOR_SIZE = 100 # latent vector size
+config.BETA1 = 0.5 # beta1 value for Adam optimizer
+config.LR = 0.0002 # learning rate according to paper
+config.EPOCHS = 100 # number of epoch to train
+config.Ksteps = 1 # number of discriminator steps for each generator step
+wandb.config.update(config)
 
 INPUT_DATA = "/home/kirill/code/diploma/data/markup"
 OUTPUT_DATA = "/home/kirill/code/diploma/data/outputs"
@@ -40,7 +47,7 @@ DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 transform = transforms.Compose([
     transforms.Grayscale(num_output_channels=1),
-    transforms.Resize(IMG_SIZE),
+    transforms.Resize(config.IMG_SIZE),
     transforms.ToTensor(),
     transforms.Normalize((0.5), (0.5)),
 ])
@@ -48,13 +55,13 @@ transform = transforms.Compose([
 
 image_path = Path(INPUT_DATA)
 train_data = BlastocystDataset(targ_dir=image_path, transform=transform)
-train_loader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True, drop_last=True) 
+train_loader = DataLoader(dataset=train_data, batch_size=config.BATCH_SIZE, shuffle=True, drop_last=True, num_workers=12) 
 
 classes = train_data.classes
 num_classes = len(classes)
 
 # initialize models
-generator = Generator(num_classes, LATENT_VECTOR_SIZE).to(DEVICE)
+generator = Generator(num_classes, config.LATENT_VECTOR_SIZE).to(DEVICE)
 discriminator = Discriminator(num_classes).to(DEVICE)
 
 # initialize weights
@@ -65,21 +72,21 @@ discriminator.apply(weights_init)
 criterion = nn.BCELoss()
 
 # optimizers
-optim_g = optim.Adam(generator.parameters(), lr=LR, betas=(BETA1, 0.999))
-optim_d = optim.Adam(discriminator.parameters(), lr=LR, betas=(BETA1, 0.999))
+optim_g = optim.Adam(generator.parameters(), lr=config.LR, betas=(config.BETA1, 0.999))
+optim_d = optim.Adam(discriminator.parameters(), lr=config.LR, betas=(config.BETA1, 0.999))
 
 
 # labels for training images x for Discriminator training
-labels_real = torch.ones((BATCH_SIZE, 1)).to(DEVICE)
+labels_real = torch.ones((config.BATCH_SIZE, 1)).to(DEVICE)
 # labels for generated images G(z) for Discriminator training
-labels_fake = torch.zeros((BATCH_SIZE, 1)).to(DEVICE)
+labels_fake = torch.zeros((config.BATCH_SIZE, 1)).to(DEVICE)
 # Fix noise for testing generator and visualization
-z_test = torch.randn(9, LATENT_VECTOR_SIZE).to(DEVICE)
+z_test = torch.randn(num_classes * num_classes, config.LATENT_VECTOR_SIZE).to(DEVICE)
 
 # convert labels to onehot encoding
 onehot = torch.zeros(num_classes, num_classes).scatter_(1, torch.arange(num_classes).view(num_classes, 1), 1)
 # reshape labels to image size, with number of labels as channel
-fill = torch.zeros([num_classes, num_classes, IMG_SIZE, IMG_SIZE])
+fill = torch.zeros([num_classes, num_classes, config.IMG_SIZE, config.IMG_SIZE])
 # channel corresponding to label will be set one and all other zeros
 for i in range(num_classes):
     fill[i, i, :, :] = 1
@@ -98,7 +105,7 @@ DGz_values = []
 
 # number of training steps done on discriminator 
 step = 0
-for epoch in range(EPOCHS):
+for epoch in range(config.EPOCHS):
   epoch_D_losses = []
   epoch_G_losses = []
   epoch_Dx = []
@@ -120,9 +127,9 @@ for epoch in range(EPOCHS):
     D_x_loss = criterion(x_preds, labels_real)
     
     # create latent vector z from normal distribution 
-    z = torch.randn(BATCH_SIZE, LATENT_VECTOR_SIZE).to(DEVICE)
+    z = torch.randn(config.BATCH_SIZE, config.LATENT_VECTOR_SIZE).to(DEVICE)
     # create random y labels for generator
-    y_gen = (torch.rand(BATCH_SIZE, 1)*num_classes).type(torch.LongTensor).squeeze()
+    y_gen = (torch.rand(config.BATCH_SIZE, 1)*num_classes).type(torch.LongTensor).squeeze()
     # convert genarator labels to onehot
     G_y = onehot[y_gen].to(DEVICE)
     # preprocess labels for feeding as y input in D
@@ -155,7 +162,7 @@ for epoch in range(EPOCHS):
     ###########################
         
     # if Ksteps of Discriminator training are done, update generator
-    if step % Ksteps == 0:
+    if step % config.Ksteps == 0:
       # As we done one step of discriminator, again calculate D(G(z))
       z_out = discriminator(fake_image, DG_y)
       # loss log(D(G(z)))
@@ -178,8 +185,10 @@ for epoch in range(EPOCHS):
     Dx_values.append(sum(epoch_Dx)/len(epoch_Dx))
     DGz_values.append(sum(epoch_DGz)/len(epoch_DGz))
     
-    print(f" Epoch {epoch+1}/{EPOCHS} Discriminator Loss {D_losses[-1]:.3f} Generator Loss {G_losses[-1]:.3f}"
+    print(f" Epoch {epoch+1}/{config.EPOCHS} Discriminator Loss {D_losses[-1]:.3f} Generator Loss {G_losses[-1]:.3f}"
          + f" D(x) {Dx_values[-1]:.3f} D(G(x)) {DGz_values[-1]:.3f}")
+    
+    wandb.log({"Discriminator Loss": D_losses[-1], "Generator Loss": G_losses[-1]})
     
     # Generating images after each epoch and saving
     # set generator to evaluation mode
@@ -191,6 +200,8 @@ for epoch in range(EPOCHS):
       save_image(fake_test, f"{OUTPUT_DATA}/epoch_{epoch+1}.jpg", nrow=3, padding=0, normalize=True)
     # set generator to training mode
     generator.train()
+
+wandb.finish()
 
 plt.figure(figsize=(10,5))
 plt.title("Discriminator and Generator loss during Training")
