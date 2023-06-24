@@ -135,3 +135,4 @@ ui-tests/playwright-report
 
 # text
 /text
+!/text/Dolmatov_diploma.pdf
