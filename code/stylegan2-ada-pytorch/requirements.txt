@@ -1,0 +1,9 @@
+pillow
+click
+tqdm
+requests
+ninja
+psutil
+scipy
+wandb
+imageio-ffmpeg==0.4.3

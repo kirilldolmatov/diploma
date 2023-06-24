@@ -1,0 +1,10 @@
+__pycache__/
+.cache/
+
+# data
+/out
+/output
+/wandb
+/pretrained_models
+/datasets
+.github
